@@ -85,7 +85,7 @@ var = load_all(variant_file)
 prd = load_all(product_file)
 
 # =====================================================
-# FILTER SIDEBAR (1x CLICK)
+# FILTER SIDEBAR (1x CLICK FIX)
 # =====================================================
 for k in ["format", "variant", "product"]:
     if k not in st.session_state:
@@ -103,8 +103,10 @@ fmt_ids = st.sidebar.multiselect(
 )
 st.session_state["format"] = [fmt_map[i] for i in fmt_ids]
 
-variants = sorted(df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
-    ["PRODUCT_VARIANT_NAME"].dropna().unique())
+variants = sorted(
+    df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
+    ["PRODUCT_VARIANT_NAME"].dropna().unique()
+)
 var_map = make_option_map(variants)
 var_ids = st.sidebar.multiselect(
     "Variant",
@@ -114,8 +116,10 @@ var_ids = st.sidebar.multiselect(
 )
 st.session_state["variant"] = [var_map[i] for i in var_ids]
 
-products = sorted(df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
-    ["PRODUCT_NAME"].dropna().unique())
+products = sorted(
+    df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
+    ["PRODUCT_NAME"].dropna().unique()
+)
 prd_map = make_option_map(products)
 prd_ids = st.sidebar.multiselect(
     "Product",
@@ -183,7 +187,7 @@ for f in st.session_state["format"]:
                     ])
 
 # =====================================================
-# DISPLAY STREAMLIT (PRODUCT = BIRU)
+# DISPLAY STREAMLIT (ONLY NAME = BLUE)
 # =====================================================
 display_df = pd.DataFrame(rows, columns=[
     "Produk","Cont YTD","Value MTD","Value YTD",
@@ -209,9 +213,10 @@ display_df.columns = pd.MultiIndex.from_tuples([
 ])
 
 def highlight_product(row):
+    styles = [""] * len(row)
     if row.iloc[0].startswith("            "):
-        return ["color: blue"] * len(row)
-    return [""] * len(row)
+        styles[0] = "color: blue"
+    return styles
 
 st.dataframe(
     display_df.style.apply(highlight_product, axis=1),
@@ -219,7 +224,7 @@ st.dataframe(
 )
 
 # =====================================================
-# DOWNLOAD EXCEL (PRODUCT = BIRU)
+# DOWNLOAD EXCEL (ONLY NAME = BLUE)
 # =====================================================
 output = BytesIO()
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -256,7 +261,7 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             v = r[c]
             if c == 1 or c >= 4:
                 if v is not None:
-                    ws.write_number(i, c, v/100, pct_g if v >= 0 else pct_r)
+                    ws.write_number(i, c, v / 100, pct_g if v >= 0 else pct_r)
             else:
                 ws.write_number(i, c, v or 0, num)
 
