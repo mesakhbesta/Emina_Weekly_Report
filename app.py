@@ -85,7 +85,7 @@ var = load_all(variant_file)
 prd = load_all(product_file)
 
 # =====================================================
-# FILTER SIDEBAR (1x CLICK FIX)
+# FILTER SIDEBAR (1x klik, scrollable)
 # =====================================================
 for k in ["format", "variant", "product"]:
     if k not in st.session_state:
@@ -93,6 +93,7 @@ for k in ["format", "variant", "product"]:
 
 st.sidebar.title("Filter Products")
 
+# Format
 formats = sorted(df["PRODUCT_FORMAT"].dropna().unique())
 fmt_map = make_option_map(formats)
 fmt_ids = st.sidebar.multiselect(
@@ -100,9 +101,11 @@ fmt_ids = st.sidebar.multiselect(
     list(fmt_map.keys()),
     format_func=lambda x: fmt_map[x],
     default=[k for k, v in fmt_map.items() if v in st.session_state["format"]],
+    max_height=400
 )
 st.session_state["format"] = [fmt_map[i] for i in fmt_ids]
 
+# Variant
 variants = sorted(
     df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
     ["PRODUCT_VARIANT_NAME"].dropna().unique()
@@ -113,9 +116,11 @@ var_ids = st.sidebar.multiselect(
     list(var_map.keys()),
     format_func=lambda x: var_map[x],
     default=[k for k, v in var_map.items() if v in st.session_state["variant"]],
+    max_height=400
 )
 st.session_state["variant"] = [var_map[i] for i in var_ids]
 
+# Product
 products = sorted(
     df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
     ["PRODUCT_NAME"].dropna().unique()
@@ -126,6 +131,7 @@ prd_ids = st.sidebar.multiselect(
     list(prd_map.keys()),
     format_func=lambda x: prd_map[x],
     default=[k for k, v in prd_map.items() if v in st.session_state["product"]],
+    max_height=400
 )
 st.session_state["product"] = [prd_map[i] for i in prd_ids]
 
@@ -187,7 +193,7 @@ for f in st.session_state["format"]:
                     ])
 
 # =====================================================
-# DISPLAY STREAMLIT (ONLY NAME = BLUE)
+# STREAMLIT DISPLAY (HANYA NAMA PRODUK BIRU)
 # =====================================================
 display_df = pd.DataFrame(rows, columns=[
     "Produk","Cont YTD","Value MTD","Value YTD",
@@ -224,7 +230,7 @@ st.dataframe(
 )
 
 # =====================================================
-# DOWNLOAD EXCEL (ONLY NAME = BLUE)
+# DOWNLOAD EXCEL (HANYA NAMA PRODUK BIRU)
 # =====================================================
 output = BytesIO()
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -247,7 +253,6 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     )
 
     for i, r in enumerate(rows, start=2):
-
         if r[0].startswith("            "):
             name_fmt = ind2
         elif r[0].startswith("        "):
