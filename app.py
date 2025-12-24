@@ -100,6 +100,7 @@ fmt_ids = st.sidebar.multiselect(
     list(fmt_map.keys()),
     format_func=lambda x: fmt_map[x],
     default=[k for k, v in fmt_map.items() if v in st.session_state["format"]],
+    max_height=400
 )
 st.session_state["format"] = [fmt_map[i] for i in fmt_ids]
 
@@ -113,6 +114,7 @@ var_ids = st.sidebar.multiselect(
     list(var_map.keys()),
     format_func=lambda x: var_map[x],
     default=[k for k, v in var_map.items() if v in st.session_state["variant"]],
+    max_height=400
 )
 st.session_state["variant"] = [var_map[i] for i in var_ids]
 
@@ -126,6 +128,7 @@ prd_ids = st.sidebar.multiselect(
     list(prd_map.keys()),
     format_func=lambda x: prd_map[x],
     default=[k for k, v in prd_map.items() if v in st.session_state["product"]],
+    max_height=400
 )
 st.session_state["product"] = [prd_map[i] for i in prd_ids]
 
@@ -215,7 +218,7 @@ display_df.columns = pd.MultiIndex.from_tuples([
 def highlight_product(row):
     styles = [""] * len(row)
     if row.iloc[0].startswith("            "):
-        styles[0] = "color: blue"
+        styles[0] = "color: blue"  # HANYA KOLM 0
     return styles
 
 st.dataframe(
@@ -247,7 +250,6 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     )
 
     for i, r in enumerate(rows, start=2):
-
         if r[0].startswith("            "):
             name_fmt = ind2
         elif r[0].startswith("        "):
