@@ -3,19 +3,21 @@ import pandas as pd
 from io import BytesIO
 import datetime
 
-# =====================================================
-# PAGE CONFIG
-# =====================================================
+# =============================
+# CONFIG
+# =============================
 st.set_page_config(layout="wide")
 st.title("Dynamic Emina Metrics Report")
 
-cutoff_date = st.sidebar.date_input("Select Cut-off Date", datetime.date.today())
+cutoff_date = st.sidebar.date_input(
+    "Select Cut-off Date", datetime.date.today()
+)
 cutoff_str = cutoff_date.strftime("%d %B %Y")
 
-# =====================================================
-# FILE UPLOAD
-# =====================================================
-with st.sidebar.expander("Upload Excel Files (click to expand)", expanded=False):
+# =============================
+# UPLOAD FILES
+# =============================
+with st.sidebar.expander("Upload Excel Files", expanded=False):
     master_file = st.file_uploader("Master Product", type=["xlsx"])
     format_file = st.file_uploader("Format Metrics", type=["xlsx"])
     variant_file = st.file_uploader("Variant Metrics", type=["xlsx"])
@@ -25,17 +27,9 @@ if not all([master_file, format_file, variant_file, product_file]):
     st.warning("Please upload all 4 Excel files.")
     st.stop()
 
-# =====================================================
-# CACHE & HELPER
-# =====================================================
-@st.cache_data(show_spinner=False)
-def load_excel(file, sheet, skip=0):
-    return pd.read_excel(file, sheet_name=sheet, skiprows=skip)
-
-def make_option_map(values):
-    values = list(values)
-    return {i: v for i, v in enumerate(values)}
-
+# =============================
+# HELPERS
+# =============================
 def parse_percent(val):
     if pd.isna(val):
         return None
@@ -49,149 +43,168 @@ def parse_number(val):
     return round(float(val), 0)
 
 def load_map(sheet, key_col, val_col, file, skip=0, parser=None):
-    tmp = load_excel(file, sheet, skip)
-    result = {}
-    for _, r in tmp.iterrows():
+    df = pd.read_excel(file, sheet_name=sheet, skiprows=skip)
+    out = {}
+    for _, r in df.iterrows():
         v = r[val_col]
         if parser:
             v = parser(v)
-        result[r[key_col]] = v
-    return result
+        out[r[key_col]] = v
+    return out
 
-# =====================================================
+# =============================
 # LOAD MASTER
-# =====================================================
+# =============================
 df = pd.read_excel(master_file)
 
-# =====================================================
+# =============================
 # LOAD METRICS
-# =====================================================
-def load_all(file):
-    return dict(
-        cont=load_map("Sheet 18", "Product P",
-            "% of Total Current DO TP2 along Product P, Product P Hidden",
-            file, parser=parse_percent),
-        mtd=load_map("Sheet 1", "Product P", "Current DO", file, parser=parse_number),
-        ytd=load_map("Sheet 1", "Product P", "Current DO TP2", file, parser=parse_number),
-        g_mtd=load_map("Sheet 4", "Product P", "vs LY", file, skip=1, parser=parse_percent),
-        g_l3m=load_map("Sheet 3", "Product P", "vs L3M", file, skip=1, parser=parse_percent),
-        g_ytd=load_map("Sheet 5", "Product P", "vs LY", file, skip=1, parser=parse_percent),
-        a_mtd=load_map("Sheet 13", "Product P", "Current Achievement", file, parser=parse_percent),
-        a_ytd=load_map("Sheet 14", "Product P", "Current Achievement TP2", file, parser=parse_percent),
-    )
+# =============================
+cont_fmt = load_map("Sheet 18", "Product P",
+    "% of Total Current DO TP2 along Product P, Product P Hidden",
+    format_file, parser=parse_percent)
 
-fmt = load_all(format_file)
-var = load_all(variant_file)
-prd = load_all(product_file)
+val_mtd_fmt = load_map("Sheet 1", "Product P", "Current DO", format_file, parser=parse_number)
+val_ytd_fmt = load_map("Sheet 1", "Product P", "Current DO TP2", format_file, parser=parse_number)
+gr_mtd_fmt = load_map("Sheet 4", "Product P", "vs LY", format_file, skip=1, parser=parse_percent)
+gr_l3m_fmt = load_map("Sheet 3", "Product P", "vs L3M", format_file, skip=1, parser=parse_percent)
+gr_ytd_fmt = load_map("Sheet 5", "Product P", "vs LY", format_file, skip=1, parser=parse_percent)
+ach_mtd_fmt = load_map("Sheet 13", "Product P", "Current Achievement", format_file, parser=parse_percent)
+ach_ytd_fmt = load_map("Sheet 14", "Product P", "Current Achievement TP2", format_file, parser=parse_percent)
 
-# =====================================================
-# FILTER SIDEBAR (1x CLICK FIX)
-# =====================================================
-for k in ["format", "variant", "product"]:
-    if k not in st.session_state:
-        st.session_state[k] = []
+cont_var = load_map("Sheet 18", "Product P",
+    "% of Total Current DO TP2 along Product P, Product P Hidden",
+    variant_file, parser=parse_percent)
 
+val_mtd_var = load_map("Sheet 1", "Product P", "Current DO", variant_file, parser=parse_number)
+val_ytd_var = load_map("Sheet 1", "Product P", "Current DO TP2", variant_file, parser=parse_number)
+gr_mtd_var = load_map("Sheet 4", "Product P", "vs LY", variant_file, skip=1, parser=parse_percent)
+gr_l3m_var = load_map("Sheet 3", "Product P", "vs L3M", variant_file, skip=1, parser=parse_percent)
+gr_ytd_var = load_map("Sheet 5", "Product P", "vs LY", variant_file, skip=1, parser=parse_percent)
+ach_mtd_var = load_map("Sheet 13", "Product P", "Current Achievement", variant_file, parser=parse_percent)
+ach_ytd_var = load_map("Sheet 14", "Product P", "Current Achievement TP2", variant_file, parser=parse_percent)
+
+cont_prod = load_map("Sheet 18", "Product P",
+    "% of Total Current DO TP2 along Product P, Product P Hidden",
+    product_file, parser=parse_percent)
+
+val_mtd_prod = load_map("Sheet 1", "Product P", "Current DO", product_file, parser=parse_number)
+val_ytd_prod = load_map("Sheet 1", "Product P", "Current DO TP2", product_file, parser=parse_number)
+gr_mtd_prod = load_map("Sheet 4", "Product P", "vs LY", product_file, skip=1, parser=parse_percent)
+gr_l3m_prod = load_map("Sheet 3", "Product P", "vs L3M", product_file, skip=1, parser=parse_percent)
+gr_ytd_prod = load_map("Sheet 5", "Product P", "vs LY", product_file, skip=1, parser=parse_percent)
+ach_mtd_prod = load_map("Sheet 13", "Product P", "Current Achievement", product_file, parser=parse_percent)
+ach_ytd_prod = load_map("Sheet 14", "Product P", "Current Achievement TP2", product_file, parser=parse_percent)
+
+# =============================
+# FILTER (ANTI DOUBLE CLICK)
+# =============================
 st.sidebar.title("Filter Products")
 
 formats = sorted(df["PRODUCT_FORMAT"].dropna().unique())
-fmt_map = make_option_map(formats)
-fmt_ids = st.sidebar.multiselect(
+fmt_ids = {i: v for i, v in enumerate(formats)}
+
+fmt_sel = st.sidebar.multiselect(
     "Format",
-    list(fmt_map.keys()),
-    format_func=lambda x: fmt_map[x],
-    default=[k for k, v in fmt_map.items() if v in st.session_state["format"]],
+    list(fmt_ids.keys()),
+    format_func=lambda x: fmt_ids[x],
+    key="fmt_sel"
 )
-st.session_state["format"] = [fmt_map[i] for i in fmt_ids]
+
+selected_formats = [fmt_ids[i] for i in fmt_sel]
 
 variants = sorted(
-    df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
+    df[df["PRODUCT_FORMAT"].isin(selected_formats)]
     ["PRODUCT_VARIANT_NAME"].dropna().unique()
 )
-var_map = make_option_map(variants)
-var_ids = st.sidebar.multiselect(
+var_ids = {i: v for i, v in enumerate(variants)}
+
+var_sel = st.sidebar.multiselect(
     "Variant",
-    list(var_map.keys()),
-    format_func=lambda x: var_map[x],
-    default=[k for k, v in var_map.items() if v in st.session_state["variant"]],
+    list(var_ids.keys()),
+    format_func=lambda x: var_ids[x],
+    key="var_sel"
 )
-st.session_state["variant"] = [var_map[i] for i in var_ids]
+
+selected_variants = [var_ids[i] for i in var_sel]
 
 products = sorted(
-    df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
+    df[df["PRODUCT_VARIANT_NAME"].isin(selected_variants)]
     ["PRODUCT_NAME"].dropna().unique()
 )
-prd_map = make_option_map(products)
-prd_ids = st.sidebar.multiselect(
-    "Product",
-    list(prd_map.keys()),
-    format_func=lambda x: prd_map[x],
-    default=[k for k, v in prd_map.items() if v in st.session_state["product"]],
-)
-st.session_state["product"] = [prd_map[i] for i in prd_ids]
+prd_ids = {i: v for i, v in enumerate(products)}
 
-# =====================================================
-# BUILD ROWS
-# =====================================================
+prd_sel = st.sidebar.multiselect(
+    "Product",
+    list(prd_ids.keys()),
+    format_func=lambda x: prd_ids[x],
+    key="prd_sel"
+)
+
+selected_products = [prd_ids[i] for i in prd_sel]
+
+# =============================
+# BUILD TABLE
+# =============================
 rows = []
+
 rows.append([
     "GRAND TOTAL",
-    fmt["cont"].get("GRAND TOTAL"),
-    fmt["mtd"].get("GRAND TOTAL"),
-    fmt["ytd"].get("GRAND TOTAL"),
-    fmt["g_mtd"].get("GRAND TOTAL"),
-    fmt["g_l3m"].get("GRAND TOTAL"),
-    fmt["g_ytd"].get("GRAND TOTAL"),
-    fmt["a_mtd"].get("GRAND TOTAL"),
-    fmt["a_ytd"].get("GRAND TOTAL"),
+    cont_fmt.get("GRAND TOTAL"),
+    val_mtd_fmt.get("GRAND TOTAL"),
+    val_ytd_fmt.get("GRAND TOTAL"),
+    gr_mtd_fmt.get("GRAND TOTAL"),
+    gr_l3m_fmt.get("GRAND TOTAL"),
+    gr_ytd_fmt.get("GRAND TOTAL"),
+    ach_mtd_fmt.get("GRAND TOTAL"),
+    ach_ytd_fmt.get("GRAND TOTAL"),
 ])
 
-for f in st.session_state["format"]:
+for f in selected_formats:
     rows.append([
         f,
-        fmt["cont"].get(f),
-        fmt["mtd"].get(f),
-        fmt["ytd"].get(f),
-        fmt["g_mtd"].get(f),
-        fmt["g_l3m"].get(f),
-        fmt["g_ytd"].get(f),
-        fmt["a_mtd"].get(f),
-        fmt["a_ytd"].get(f),
+        cont_fmt.get(f),
+        val_mtd_fmt.get(f),
+        val_ytd_fmt.get(f),
+        gr_mtd_fmt.get(f),
+        gr_l3m_fmt.get(f),
+        gr_ytd_fmt.get(f),
+        ach_mtd_fmt.get(f),
+        ach_ytd_fmt.get(f),
     ])
 
-    for v in st.session_state["variant"]:
+    for v in selected_variants:
         if v in df[df["PRODUCT_FORMAT"] == f]["PRODUCT_VARIANT_NAME"].values:
             rows.append([
                 f"        {v}",
-                var["cont"].get(v),
-                var["mtd"].get(v),
-                var["ytd"].get(v),
-                var["g_mtd"].get(v),
-                var["g_l3m"].get(v),
-                var["g_ytd"].get(v),
-                var["a_mtd"].get(v),
-                var["a_ytd"].get(v),
+                cont_var.get(v),
+                val_mtd_var.get(v),
+                val_ytd_var.get(v),
+                gr_mtd_var.get(v),
+                gr_l3m_var.get(v),
+                gr_ytd_var.get(v),
+                ach_mtd_var.get(v),
+                ach_ytd_var.get(v),
             ])
 
-            for p in st.session_state["product"]:
+            for p in selected_products:
                 if p in df[df["PRODUCT_VARIANT_NAME"] == v]["PRODUCT_NAME"].values:
                     rows.append([
                         f"            {p}",
-                        prd["cont"].get(p),
-                        prd["mtd"].get(p),
-                        prd["ytd"].get(p),
-                        prd["g_mtd"].get(p),
-                        prd["g_l3m"].get(p),
-                        prd["g_ytd"].get(p),
-                        prd["a_mtd"].get(p),
-                        prd["a_ytd"].get(p),
+                        cont_prod.get(p),
+                        val_mtd_prod.get(p),
+                        val_ytd_prod.get(p),
+                        gr_mtd_prod.get(p),
+                        gr_l3m_prod.get(p),
+                        gr_ytd_prod.get(p),
+                        ach_mtd_prod.get(p),
+                        ach_ytd_prod.get(p),
                     ])
 
-# =====================================================
-# DISPLAY STREAMLIT (ONLY NAME = BLUE)
-# =====================================================
 display_df = pd.DataFrame(rows, columns=[
     "Produk","Cont YTD","Value MTD","Value YTD",
-    "Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach YTD"
+    "Growth MTD","Growth %Gr L3M","Growth YTD",
+    "Ach MTD","Ach YTD"
 ])
 
 def fmt_pct(x):
@@ -200,18 +213,9 @@ def fmt_pct(x):
 for c in ["Cont YTD","Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach YTD"]:
     display_df[c] = display_df[c].apply(fmt_pct)
 
-display_df.columns = pd.MultiIndex.from_tuples([
-    ("Cut-off: " + cutoff_str, ""),
-    ("","Cont YTD"),
-    ("Value","MTD"),
-    ("Value","YTD"),
-    ("Growth","MTD"),
-    ("Growth","%Gr L3M"),
-    ("Growth","YTD"),
-    ("Ach","MTD"),
-    ("Ach","YTD"),
-])
-
+# =============================
+# STREAMLIT STYLING (ONLY NAME BLUE)
+# =============================
 def highlight_product(row):
     styles = [""] * len(row)
     if row.iloc[0].startswith("            "):
@@ -223,16 +227,16 @@ st.dataframe(
     use_container_width=True
 )
 
-# =====================================================
-# DOWNLOAD EXCEL (ONLY NAME = BLUE)
-# =====================================================
+# =============================
+# EXPORT EXCEL
+# =============================
 output = BytesIO()
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     wb = writer.book
     ws = wb.add_worksheet("Report")
     writer.sheets["Report"] = ws
 
-    header = wb.add_format({"bold": True, "align": "center", "border": 1})
+    header = wb.add_format({"bold": True, "border": 1, "align": "center"})
     bold = wb.add_format({"bold": True, "border": 1})
     ind1 = wb.add_format({"border": 1, "indent": 2})
     ind2 = wb.add_format({"border": 1, "indent": 4, "font_color": "blue"})
@@ -241,13 +245,13 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     pct_r = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "red"})
 
     ws.write(0, 0, "Cut-off: " + cutoff_str, header)
-    ws.write_row(1, 0,
-        ["Produk","Cont YTD","Value MTD","Value YTD","Growth MTD","%Gr L3M","Growth YTD","Ach MTD","Ach YTD"],
-        header
-    )
+
+    ws.write_row(1, 0, [
+        "Produk","Cont YTD","Value MTD","Value YTD",
+        "Growth MTD","%Gr L3M","Growth YTD","Ach MTD","Ach YTD"
+    ], header)
 
     for i, r in enumerate(rows, start=2):
-
         if r[0].startswith("            "):
             name_fmt = ind2
         elif r[0].startswith("        "):
@@ -257,15 +261,19 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
 
         ws.write(i, 0, r[0].strip(), name_fmt)
 
-        for c in range(1, 9):
-            v = r[c]
-            if c == 1 or c >= 4:
-                if v is not None:
-                    ws.write_number(i, c, v / 100, pct_g if v >= 0 else pct_r)
-            else:
-                ws.write_number(i, c, v or 0, num)
+        ws.write_number(i, 1, (r[1] or 0)/100, pct_g if (r[1] or 0) >= 0 else pct_r)
+        ws.write_number(i, 2, r[2] or 0, num)
+        ws.write_number(i, 3, r[3] or 0, num)
 
-    ws.set_column("A:A", 50)
+        for j, v in enumerate(r[4:7], start=4):
+            if v is not None:
+                ws.write_number(i, j, v/100, pct_g if v >= 0 else pct_r)
+
+        for j, v in enumerate(r[7:9], start=7):
+            if v is not None:
+                ws.write_number(i, j, v/100, pct_g if v >= 0 else pct_r)
+
+    ws.set_column("A:A", 55)
     ws.set_column("B:I", 18)
 
 output.seek(0)
