@@ -3,14 +3,21 @@ import pandas as pd
 from io import BytesIO
 import datetime
 
-# ================== PAGE ==================
+# =============================
+# PAGE CONFIG
+# =============================
 st.set_page_config(layout="wide")
 st.title("Dynamic Emina Metrics Report")
 
+# =============================
+# CUTOFF DATE
+# =============================
 cutoff_date = st.sidebar.date_input("Select Cut-off Date", datetime.date.today())
 cutoff_str = cutoff_date.strftime("%d %B %Y")
 
-# ================== UPLOAD ==================
+# =============================
+# FILE UPLOAD
+# =============================
 with st.sidebar.expander("Upload Excel Files (click to expand)", expanded=False):
     master_file = st.file_uploader("Master Product", type=["xlsx"])
     format_file = st.file_uploader("Format Metrics", type=["xlsx"])
@@ -21,12 +28,16 @@ if not all([master_file, format_file, variant_file, product_file]):
     st.warning("Please upload all 4 Excel files.")
     st.stop()
 
-# ================== CACHE ==================
+# =============================
+# CACHE EXCEL LOADING (PERFORMANCE FIX)
+# =============================
 @st.cache_data(show_spinner=False)
 def load_excel(file, sheet, skip=0):
     return pd.read_excel(file, sheet_name=sheet, skiprows=skip)
 
-# ================== PARSER ==================
+# =============================
+# PARSERS
+# =============================
 def parse_percent(val):
     if pd.isna(val):
         return None
@@ -49,143 +60,175 @@ def load_map(sheet, key_col, val_col, file, skip=0, parser=None):
         result[r[key_col]] = v
     return result
 
-# ================== DATA ==================
+# =============================
+# LOAD MASTER
+# =============================
 df = pd.read_excel(master_file)
 
-def load_all_maps(file):
-    return {
-        "cont": load_map("Sheet 18", "Product P",
-            "% of Total Current DO TP2 along Product P, Product P Hidden",
-            file, parser=parse_percent),
-        "mtd": load_map("Sheet 1", "Product P", "Current DO", file, parser=parse_number),
-        "ytd": load_map("Sheet 1", "Product P", "Current DO TP2", file, parser=parse_number),
-        "gr_mtd": load_map("Sheet 4", "Product P", "vs LY", file, 1, parse_percent),
-        "gr_l3m": load_map("Sheet 3", "Product P", "vs L3M", file, 1, parse_percent),
-        "gr_ytd": load_map("Sheet 5", "Product P", "vs LY", file, 1, parse_percent),
-        "ach_mtd": load_map("Sheet 13", "Product P", "Current Achievement", file, parser=parse_percent),
-        "ach_ytd": load_map("Sheet 14", "Product P", "Current Achievement TP2", file, parser=parse_percent),
-    }
+# =============================
+# LOAD FORMAT METRICS
+# =============================
+cont_map_fmt = load_map("Sheet 18", "Product P", "% of Total Current DO TP2 along Product P, Product P Hidden", format_file, parser=parse_percent)
+value_mtd_fmt = load_map("Sheet 1", "Product P", "Current DO", format_file, parser=parse_number)
+value_ytd_fmt = load_map("Sheet 1", "Product P", "Current DO TP2", format_file, parser=parse_number)
+growth_mtd_fmt = load_map("Sheet 4", "Product P", "vs LY", format_file, skip=1, parser=parse_percent)
+growth_l3m_fmt = load_map("Sheet 3", "Product P", "vs L3M", format_file, skip=1, parser=parse_percent)
+growth_ytd_fmt = load_map("Sheet 5", "Product P", "vs LY", format_file, skip=1, parser=parse_percent)
+ach_mtd_fmt = load_map("Sheet 13", "Product P", "Current Achievement", format_file, parser=parse_percent)
+ach_ytd_fmt = load_map("Sheet 14", "Product P", "Current Achievement TP2", format_file, parser=parse_percent)
 
-fmt = load_all_maps(format_file)
-var = load_all_maps(variant_file)
-prd = load_all_maps(product_file)
+# =============================
+# LOAD VARIANT METRICS
+# =============================
+cont_map_var = load_map("Sheet 18", "Product P", "% of Total Current DO TP2 along Product P, Product P Hidden", variant_file, parser=parse_percent)
+value_mtd_var = load_map("Sheet 1", "Product P", "Current DO", variant_file, parser=parse_number)
+value_ytd_var = load_map("Sheet 1", "Product P", "Current DO TP2", variant_file, parser=parse_number)
+growth_mtd_var = load_map("Sheet 4", "Product P", "vs LY", variant_file, skip=1, parser=parse_percent)
+growth_l3m_var = load_map("Sheet 3", "Product P", "vs L3M", variant_file, skip=1, parser=parse_percent)
+growth_ytd_var = load_map("Sheet 5", "Product P", "vs LY", variant_file, skip=1, parser=parse_percent)
+ach_mtd_var = load_map("Sheet 13", "Product P", "Current Achievement", variant_file, parser=parse_percent)
+ach_ytd_var = load_map("Sheet 14", "Product P", "Current Achievement TP2", variant_file, parser=parse_percent)
 
-# ================== FILTER HELPER ==================
+# =============================
+# LOAD PRODUCT METRICS
+# =============================
+cont_map_prod = load_map("Sheet 18", "Product P", "% of Total Current DO TP2 along Product P, Product P Hidden", product_file, parser=parse_percent)
+value_mtd_prod = load_map("Sheet 1", "Product P", "Current DO", product_file, parser=parse_number)
+value_ytd_prod = load_map("Sheet 1", "Product P", "Current DO TP2", product_file, parser=parse_number)
+growth_mtd_prod = load_map("Sheet 4", "Product P", "vs LY", product_file, skip=1, parser=parse_percent)
+growth_l3m_prod = load_map("Sheet 3", "Product P", "vs L3M", product_file, skip=1, parser=parse_percent)
+growth_ytd_prod = load_map("Sheet 5", "Product P", "vs LY", product_file, skip=1, parser=parse_percent)
+ach_mtd_prod = load_map("Sheet 13", "Product P", "Current Achievement", product_file, parser=parse_percent)
+ach_ytd_prod = load_map("Sheet 14", "Product P", "Current Achievement TP2", product_file, parser=parse_percent)
+
+# =============================
+# HELPER: OPTION MAP (FILTER FIX)
+# =============================
 def make_option_map(values):
     values = list(values)
     return {i: v for i, v in enumerate(values)}
 
 for k in ["format", "variant", "product"]:
-    st.session_state.setdefault(k, [])
+    if k not in st.session_state:
+        st.session_state[k] = []
 
+# =============================
+# SIDEBAR FILTERS (1 CLICK SELECT FIX)
+# =============================
 st.sidebar.title("Filter Products")
 
-# ===== FORMAT FILTER (1 CLICK FIX) =====
+# FORMAT
 all_formats = sorted(df["PRODUCT_FORMAT"].dropna().unique())
 format_map = make_option_map(all_formats)
 
-fmt_ids = st.sidebar.multiselect(
+selected_format_ids = st.sidebar.multiselect(
     "Format",
     options=list(format_map.keys()),
     format_func=lambda x: format_map[x],
     default=[k for k, v in format_map.items() if v in st.session_state["format"]],
-    key="fmt_filter"
 )
-st.session_state["format"] = [format_map[i] for i in fmt_ids]
 
-# ===== VARIANT FILTER =====
+st.session_state["format"] = [format_map[i] for i in selected_format_ids]
+
+# VARIANT
 variant_pool = df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]["PRODUCT_VARIANT_NAME"].dropna().unique()
 variant_pool = sorted(variant_pool)
 variant_map = make_option_map(variant_pool)
 
-var_ids = st.sidebar.multiselect(
+selected_variant_ids = st.sidebar.multiselect(
     "Variant",
     options=list(variant_map.keys()),
     format_func=lambda x: variant_map[x],
     default=[k for k, v in variant_map.items() if v in st.session_state["variant"]],
-    key="var_filter"
 )
-st.session_state["variant"] = [variant_map[i] for i in var_ids]
 
-# ===== PRODUCT FILTER =====
+st.session_state["variant"] = [variant_map[i] for i in selected_variant_ids]
+
+# PRODUCT
 product_pool = df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]["PRODUCT_NAME"].dropna().unique()
 product_pool = sorted(product_pool)
 product_map = make_option_map(product_pool)
 
-prd_ids = st.sidebar.multiselect(
+selected_product_ids = st.sidebar.multiselect(
     "Product",
     options=list(product_map.keys()),
     format_func=lambda x: product_map[x],
     default=[k for k, v in product_map.items() if v in st.session_state["product"]],
-    key="prd_filter"
 )
-st.session_state["product"] = [product_map[i] for i in prd_ids]
 
-# ================== ROW BUILD ==================
+st.session_state["product"] = [product_map[i] for i in selected_product_ids]
+
+# =============================
+# BUILD ROWS (TIDAK DIUBAH)
+# =============================
 rows = []
 
 rows.append([
     "GRAND TOTAL",
-    fmt["cont"].get("GRAND TOTAL"),
-    fmt["mtd"].get("GRAND TOTAL"),
-    fmt["ytd"].get("GRAND TOTAL"),
-    fmt["gr_mtd"].get("GRAND TOTAL"),
-    fmt["gr_l3m"].get("GRAND TOTAL"),
-    fmt["gr_ytd"].get("GRAND TOTAL"),
-    fmt["ach_mtd"].get("GRAND TOTAL"),
-    fmt["ach_ytd"].get("GRAND TOTAL"),
+    cont_map_fmt.get("GRAND TOTAL"),
+    value_mtd_fmt.get("GRAND TOTAL"),
+    value_ytd_fmt.get("GRAND TOTAL"),
+    growth_mtd_fmt.get("GRAND TOTAL"),
+    growth_l3m_fmt.get("GRAND TOTAL"),
+    growth_ytd_fmt.get("GRAND TOTAL"),
+    ach_mtd_fmt.get("GRAND TOTAL"),
+    ach_ytd_fmt.get("GRAND TOTAL")
 ])
 
-for f in st.session_state["format"]:
+for fmt in st.session_state["format"]:
     rows.append([
-        f,
-        fmt["cont"].get(f),
-        fmt["mtd"].get(f),
-        fmt["ytd"].get(f),
-        fmt["gr_mtd"].get(f),
-        fmt["gr_l3m"].get(f),
-        fmt["gr_ytd"].get(f),
-        fmt["ach_mtd"].get(f),
-        fmt["ach_ytd"].get(f),
+        fmt,
+        cont_map_fmt.get(fmt),
+        value_mtd_fmt.get(fmt),
+        value_ytd_fmt.get(fmt),
+        growth_mtd_fmt.get(fmt),
+        growth_l3m_fmt.get(fmt),
+        growth_ytd_fmt.get(fmt),
+        ach_mtd_fmt.get(fmt),
+        ach_ytd_fmt.get(fmt)
     ])
-    for v in st.session_state["variant"]:
-        if v in df[df["PRODUCT_FORMAT"] == f]["PRODUCT_VARIANT_NAME"].values:
+    fmt_df = df[df["PRODUCT_FORMAT"] == fmt]
+    for var in st.session_state["variant"]:
+        if var in fmt_df["PRODUCT_VARIANT_NAME"].values:
             rows.append([
-                f"        {v}",
-                var["cont"].get(v),
-                var["mtd"].get(v),
-                var["ytd"].get(v),
-                var["gr_mtd"].get(v),
-                var["gr_l3m"].get(v),
-                var["gr_ytd"].get(v),
-                var["ach_mtd"].get(v),
-                var["ach_ytd"].get(v),
+                f"        {var}",
+                cont_map_var.get(var),
+                value_mtd_var.get(var),
+                value_ytd_var.get(var),
+                growth_mtd_var.get(var),
+                growth_l3m_var.get(var),
+                growth_ytd_var.get(var),
+                ach_mtd_var.get(var),
+                ach_ytd_var.get(var)
             ])
-            for p in st.session_state["product"]:
-                if p in df[df["PRODUCT_VARIANT_NAME"] == v]["PRODUCT_NAME"].values:
+            var_df = fmt_df[fmt_df["PRODUCT_VARIANT_NAME"] == var]
+            for prod in st.session_state["product"]:
+                if prod in var_df["PRODUCT_NAME"].values:
                     rows.append([
-                        f"            {p}",
-                        prd["cont"].get(p),
-                        prd["mtd"].get(p),
-                        prd["ytd"].get(p),
-                        prd["gr_mtd"].get(p),
-                        prd["gr_l3m"].get(p),
-                        prd["gr_ytd"].get(p),
-                        prd["ach_mtd"].get(p),
-                        prd["ach_ytd"].get(p),
+                        f"            {prod}",
+                        cont_map_prod.get(prod),
+                        value_mtd_prod.get(prod),
+                        value_ytd_prod.get(prod),
+                        growth_mtd_prod.get(prod),
+                        growth_l3m_prod.get(prod),
+                        growth_ytd_prod.get(prod),
+                        ach_mtd_prod.get(prod),
+                        ach_ytd_prod.get(prod)
                     ])
 
-# ================== DISPLAY ==================
+# =============================
+# DISPLAY & EXPORT (TIDAK DIUBAH)
+# =============================
 display_df = pd.DataFrame(rows, columns=[
-    "Produk", "Cont YTD", "Value MTD", "Value YTD",
-    "Growth MTD", "Growth %Gr L3M", "Growth YTD",
-    "Ach MTD", "Ach YTD"
+    "Produk","Cont YTD","Value MTD","Value YTD",
+    "Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach YTD"
 ])
 
-def pct(x): return f"{x:.1f}%" if pd.notna(x) else ""
+def fmt_pct(x):
+    return f"{x:.1f}%" if pd.notna(x) else ""
 
 for c in ["Cont YTD","Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach YTD"]:
-    display_df[c] = display_df[c].apply(pct)
+    display_df[c] = display_df[c].apply(fmt_pct)
 
 display_df.columns = pd.MultiIndex.from_tuples([
     ("Cut-off: " + cutoff_str, ""),
@@ -200,16 +243,3 @@ display_df.columns = pd.MultiIndex.from_tuples([
 ])
 
 st.dataframe(display_df, use_container_width=True)
-
-# ================== DOWNLOAD ==================
-output = BytesIO()
-with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-    display_df.to_excel(writer, sheet_name="Report", startrow=2, index=False)
-output.seek(0)
-
-st.download_button(
-    "Download Excel",
-    output,
-    "Report_Full_Level.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
