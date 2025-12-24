@@ -85,7 +85,7 @@ var = load_all(variant_file)
 prd = load_all(product_file)
 
 # =====================================================
-# FILTER SIDEBAR (1x CLICK FIX)
+# FILTER SIDEBAR (1x CLICK)
 # =====================================================
 for k in ["format", "variant", "product"]:
     if k not in st.session_state:
@@ -96,27 +96,30 @@ st.sidebar.title("Filter Products")
 formats = sorted(df["PRODUCT_FORMAT"].dropna().unique())
 fmt_map = make_option_map(formats)
 fmt_ids = st.sidebar.multiselect(
-    "Format", list(fmt_map.keys()),
+    "Format",
+    list(fmt_map.keys()),
     format_func=lambda x: fmt_map[x],
     default=[k for k, v in fmt_map.items() if v in st.session_state["format"]],
 )
 st.session_state["format"] = [fmt_map[i] for i in fmt_ids]
 
 variants = sorted(df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
-                  ["PRODUCT_VARIANT_NAME"].dropna().unique())
+    ["PRODUCT_VARIANT_NAME"].dropna().unique())
 var_map = make_option_map(variants)
 var_ids = st.sidebar.multiselect(
-    "Variant", list(var_map.keys()),
+    "Variant",
+    list(var_map.keys()),
     format_func=lambda x: var_map[x],
     default=[k for k, v in var_map.items() if v in st.session_state["variant"]],
 )
 st.session_state["variant"] = [var_map[i] for i in var_ids]
 
 products = sorted(df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
-                  ["PRODUCT_NAME"].dropna().unique())
+    ["PRODUCT_NAME"].dropna().unique())
 prd_map = make_option_map(products)
 prd_ids = st.sidebar.multiselect(
-    "Product", list(prd_map.keys()),
+    "Product",
+    list(prd_map.keys()),
     format_func=lambda x: prd_map[x],
     default=[k for k, v in prd_map.items() if v in st.session_state["product"]],
 )
@@ -180,7 +183,7 @@ for f in st.session_state["format"]:
                     ])
 
 # =====================================================
-# DISPLAY TABLE
+# DISPLAY STREAMLIT (PRODUCT = BIRU)
 # =====================================================
 display_df = pd.DataFrame(rows, columns=[
     "Produk","Cont YTD","Value MTD","Value YTD",
@@ -205,10 +208,18 @@ display_df.columns = pd.MultiIndex.from_tuples([
     ("Ach","YTD"),
 ])
 
-st.dataframe(display_df, use_container_width=True)
+def highlight_product(row):
+    if row.iloc[0].startswith("            "):
+        return ["color: blue"] * len(row)
+    return [""] * len(row)
+
+st.dataframe(
+    display_df.style.apply(highlight_product, axis=1),
+    use_container_width=True
+)
 
 # =====================================================
-# DOWNLOAD EXCEL (BALIK LAGI 🔥)
+# DOWNLOAD EXCEL (PRODUCT = BIRU)
 # =====================================================
 output = BytesIO()
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -219,7 +230,7 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     header = wb.add_format({"bold": True, "align": "center", "border": 1})
     bold = wb.add_format({"bold": True, "border": 1})
     ind1 = wb.add_format({"border": 1, "indent": 2})
-    ind2 = wb.add_format({"border": 1, "indent": 4})
+    ind2 = wb.add_format({"border": 1, "indent": 4, "font_color": "blue"})
     num = wb.add_format({"border": 1, "num_format": "#,##0"})
     pct_g = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "green"})
     pct_r = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "red"})
@@ -231,8 +242,15 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     )
 
     for i, r in enumerate(rows, start=2):
-        fmt_row = bold if not r[0].startswith(" ") else ind1 if r[0].startswith("        ") else ind2
-        ws.write(i, 0, r[0].strip(), fmt_row)
+
+        if r[0].startswith("            "):
+            name_fmt = ind2
+        elif r[0].startswith("        "):
+            name_fmt = ind1
+        else:
+            name_fmt = bold
+
+        ws.write(i, 0, r[0].strip(), name_fmt)
 
         for c in range(1, 9):
             v = r[c]
