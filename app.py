@@ -32,10 +32,6 @@ if not all([master_file, format_file, variant_file, product_file]):
 def load_excel(file, sheet, skip=0):
     return pd.read_excel(file, sheet_name=sheet, skiprows=skip)
 
-def make_option_map(values):
-    values = list(values)
-    return {i: v for i, v in enumerate(values)}
-
 def parse_percent(val):
     if pd.isna(val):
         return None
@@ -85,7 +81,7 @@ var = load_all(variant_file)
 prd = load_all(product_file)
 
 # =====================================================
-# FILTER SIDEBAR (1x CLICK FIX)
+# SESSION STATE INIT
 # =====================================================
 for k in ["format", "variant", "product"]:
     if k not in st.session_state:
@@ -93,46 +89,47 @@ for k in ["format", "variant", "product"]:
 
 st.sidebar.title("Filter Products")
 
-formats = sorted(df["PRODUCT_FORMAT"].dropna().unique())
-fmt_map = make_option_map(formats)
-fmt_ids = st.sidebar.multiselect(
+# =====================================================
+# FORMAT FILTER (NO SHUFFLE)
+# =====================================================
+formats = list(dict.fromkeys(df["PRODUCT_FORMAT"].dropna()))
+st.session_state["format"] = st.sidebar.multiselect(
     "Format",
-    list(fmt_map.keys()),
-    format_func=lambda x: fmt_map[x],
-    default=[k for k, v in fmt_map.items() if v in st.session_state["format"]],
+    formats,
+    default=st.session_state["format"]
 )
-st.session_state["format"] = [fmt_map[i] for i in fmt_ids]
-
-variants = sorted(
-    df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
-    ["PRODUCT_VARIANT_NAME"].dropna().unique()
-)
-var_map = make_option_map(variants)
-var_ids = st.sidebar.multiselect(
-    "Variant",
-    list(var_map.keys()),
-    format_func=lambda x: var_map[x],
-    default=[k for k, v in var_map.items() if v in st.session_state["variant"]],
-)
-st.session_state["variant"] = [var_map[i] for i in var_ids]
-
-products = sorted(
-    df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
-    ["PRODUCT_NAME"].dropna().unique()
-)
-prd_map = make_option_map(products)
-prd_ids = st.sidebar.multiselect(
-    "Product",
-    list(prd_map.keys()),
-    format_func=lambda x: prd_map[x],
-    default=[k for k, v in prd_map.items() if v in st.session_state["product"]],
-)
-st.session_state["product"] = [prd_map[i] for i in prd_ids]
 
 # =====================================================
-# BUILD ROWS
+# VARIANT FILTER (DEPENDENT + ORDER SAFE)
+# =====================================================
+variants = list(dict.fromkeys(
+    df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
+    ["PRODUCT_VARIANT_NAME"].dropna()
+))
+st.session_state["variant"] = st.sidebar.multiselect(
+    "Variant",
+    variants,
+    default=[v for v in st.session_state["variant"] if v in variants]
+)
+
+# =====================================================
+# PRODUCT FILTER (DEPENDENT + ORDER SAFE)
+# =====================================================
+products = list(dict.fromkeys(
+    df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
+    ["PRODUCT_NAME"].dropna()
+))
+st.session_state["product"] = st.sidebar.multiselect(
+    "Product",
+    products,
+    default=[p for p in st.session_state["product"] if p in products]
+)
+
+# =====================================================
+# BUILD ROWS (FOLLOW USER ORDER)
 # =====================================================
 rows = []
+
 rows.append([
     "GRAND TOTAL",
     fmt["cont"].get("GRAND TOTAL"),
@@ -187,7 +184,7 @@ for f in st.session_state["format"]:
                     ])
 
 # =====================================================
-# DISPLAY STREAMLIT (ONLY NAME = BLUE)
+# DISPLAY STREAMLIT
 # =====================================================
 display_df = pd.DataFrame(rows, columns=[
     "Produk","Cont YTD","Value MTD","Value YTD",
@@ -224,7 +221,7 @@ st.dataframe(
 )
 
 # =====================================================
-# DOWNLOAD EXCEL (ONLY NAME = BLUE)
+# DOWNLOAD EXCEL
 # =====================================================
 output = BytesIO()
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -247,7 +244,6 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     )
 
     for i, r in enumerate(rows, start=2):
-
         if r[0].startswith("            "):
             name_fmt = ind2
         elif r[0].startswith("        "):
