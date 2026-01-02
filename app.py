@@ -6,23 +6,43 @@ import datetime
 # =====================================================
 # PAGE CONFIG
 # =====================================================
-st.set_page_config(layout="wide")
-st.title("Dynamic Emina Metrics Report")
+st.set_page_config(
+    layout="wide",
+    page_title="Weekly Performance Report"
+)
 
-cutoff_date = st.sidebar.date_input("Select Cut-off Date", datetime.date.today())
+# =====================================================
+# HEADER
+# =====================================================
+st.title("📊 Weekly Performance Report")
+st.subheader("Format, Variant & Product Performance Overview")
+
+st.caption("Dynamic performance monitoring across product hierarchy")
+st.divider()
+
+# =====================================================
+# SIDEBAR – DATE & FILE UPLOAD
+# =====================================================
+st.sidebar.header("🗓️ Reporting Settings")
+
+cutoff_date = st.sidebar.date_input(
+    "Cut-off Date",
+    datetime.date.today()
+)
 cutoff_str = cutoff_date.strftime("%d %B %Y")
 
-# =====================================================
-# FILE UPLOAD
-# =====================================================
-with st.sidebar.expander("Upload Excel Files (click to expand)", expanded=False):
+st.sidebar.info(f"📌 Cut-off Date: **{cutoff_str}**")
+
+st.sidebar.divider()
+
+with st.sidebar.expander("📁 Upload Excel Files", expanded=False):
     master_file = st.file_uploader("Master Product", type=["xlsx"])
     format_file = st.file_uploader("Format Metrics", type=["xlsx"])
     variant_file = st.file_uploader("Variant Metrics", type=["xlsx"])
     product_file = st.file_uploader("Product Metrics", type=["xlsx"])
 
 if not all([master_file, format_file, variant_file, product_file]):
-    st.warning("Please upload all 4 Excel files.")
+    st.warning("⚠️ Please upload **all 4 required Excel files** to proceed.")
     st.stop()
 
 # =====================================================
@@ -81,17 +101,15 @@ var = load_all(variant_file)
 prd = load_all(product_file)
 
 # =====================================================
-# SESSION STATE INIT
+# FILTER SECTION
 # =====================================================
+st.sidebar.header("🎯 Product Filters")
+
 for k in ["format", "variant", "product"]:
     if k not in st.session_state:
         st.session_state[k] = []
 
-st.sidebar.title("Filter Products")
-
-# =====================================================
-# FORMAT FILTER (NO SHUFFLE)
-# =====================================================
+# ---------- FORMAT ----------
 formats = list(dict.fromkeys(df["PRODUCT_FORMAT"].dropna()))
 st.session_state["format"] = st.sidebar.multiselect(
     "Format",
@@ -99,9 +117,7 @@ st.session_state["format"] = st.sidebar.multiselect(
     default=st.session_state["format"]
 )
 
-# =====================================================
-# VARIANT FILTER (DEPENDENT + ORDER SAFE)
-# =====================================================
+# ---------- VARIANT ----------
 variants = list(dict.fromkeys(
     df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
     ["PRODUCT_VARIANT_NAME"].dropna()
@@ -112,9 +128,7 @@ st.session_state["variant"] = st.sidebar.multiselect(
     default=[v for v in st.session_state["variant"] if v in variants]
 )
 
-# =====================================================
-# PRODUCT FILTER (DEPENDENT + ORDER SAFE)
-# =====================================================
+# ---------- PRODUCT ----------
 products = list(dict.fromkeys(
     df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
     ["PRODUCT_NAME"].dropna()
@@ -126,7 +140,7 @@ st.session_state["product"] = st.sidebar.multiselect(
 )
 
 # =====================================================
-# BUILD ROWS (FOLLOW USER ORDER)
+# BUILD ROWS (LOGIC AS IS)
 # =====================================================
 rows = []
 
@@ -184,8 +198,11 @@ for f in st.session_state["format"]:
                     ])
 
 # =====================================================
-# DISPLAY STREAMLIT
+# DISPLAY TABLE
 # =====================================================
+st.subheader("📈 Performance Detail Table")
+st.caption(f"Data as of **{cutoff_str}**")
+
 display_df = pd.DataFrame(rows, columns=[
     "Produk","Cont YTD","Value MTD","Value YTD",
     "Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach YTD"
@@ -198,21 +215,21 @@ for c in ["Cont YTD","Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach Y
     display_df[c] = display_df[c].apply(fmt_pct)
 
 display_df.columns = pd.MultiIndex.from_tuples([
-    ("Cut-off: " + cutoff_str, ""),
+    (f"Cut-off: {cutoff_str}", ""),
     ("","Cont YTD"),
     ("Value","MTD"),
     ("Value","YTD"),
     ("Growth","MTD"),
     ("Growth","%Gr L3M"),
     ("Growth","YTD"),
-    ("Ach","MTD"),
-    ("Ach","YTD"),
+    ("Achievement","MTD"),
+    ("Achievement","YTD"),
 ])
 
 def highlight_product(row):
     styles = [""] * len(row)
     if row.iloc[0].startswith("            "):
-        styles[0] = "color: blue"
+        styles[0] = "color: #1f77b4"
     return styles
 
 st.dataframe(
@@ -221,8 +238,11 @@ st.dataframe(
 )
 
 # =====================================================
-# DOWNLOAD EXCEL
+# DOWNLOAD SECTION
 # =====================================================
+st.divider()
+st.subheader("⬇️ Export Report")
+
 output = BytesIO()
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     wb = writer.book
@@ -237,8 +257,9 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     pct_g = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "green"})
     pct_r = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "red"})
 
-    ws.write(0, 0, "Cut-off: " + cutoff_str, header)
-    ws.write_row(1, 0,
+    ws.write(0, 0, f"Cut-off: {cutoff_str}", header)
+    ws.write_row(
+        1, 0,
         ["Produk","Cont YTD","Value MTD","Value YTD","Growth MTD","%Gr L3M","Growth YTD","Ach MTD","Ach YTD"],
         header
     )
@@ -265,9 +286,10 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     ws.set_column("B:I", 18)
 
 output.seek(0)
+
 st.download_button(
-    "Download Excel",
+    "📥 Download Excel Report",
     output,
-    "Report_Full_Level.xlsx",
+    "Weekly_Performance_Report.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
