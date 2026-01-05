@@ -110,7 +110,7 @@ for k in ["format", "variant", "product"]:
         st.session_state[k] = []
 
 # ---------- FORMAT ----------
-formats = list(dict.fromkeys(df["PRODUCT_FORMAT"].dropna()))
+formats = list(dict.fromkeys(df["PRODUCT_FORMAT_NAME"].dropna()))
 st.session_state["format"] = st.sidebar.multiselect(
     "Format",
     formats,
@@ -119,7 +119,7 @@ st.session_state["format"] = st.sidebar.multiselect(
 
 # ---------- VARIANT ----------
 variants = list(dict.fromkeys(
-    df[df["PRODUCT_FORMAT"].isin(st.session_state["format"])]
+    df[df["PRODUCT_FORMAT_NAME"].isin(st.session_state["format"])]
     ["PRODUCT_VARIANT_NAME"].dropna()
 ))
 st.session_state["variant"] = st.sidebar.multiselect(
@@ -170,7 +170,7 @@ for f in st.session_state["format"]:
     ])
 
     for v in st.session_state["variant"]:
-        if v in df[df["PRODUCT_FORMAT"] == f]["PRODUCT_VARIANT_NAME"].values:
+        if v in df[df["PRODUCT_FORMAT_NAME"] == f]["PRODUCT_VARIANT_NAME"].values:
             rows.append([
                 f"        {v}",
                 var["cont"].get(v),
@@ -293,3 +293,4 @@ st.download_button(
     "Weekly_Performance_Report.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
