@@ -6,10 +6,7 @@ import datetime
 # =====================================================
 # PAGE CONFIG
 # =====================================================
-st.set_page_config(
-    layout="wide",
-    page_title="Weekly Performance Report"
-)
+st.set_page_config(layout="wide", page_title="Weekly Performance Report")
 
 # =====================================================
 # HEADER
@@ -41,12 +38,8 @@ if not all([master_file, format_file, variant_file, product_file]):
     st.stop()
 
 # =====================================================
-# CACHE & HELPER
+# HELPER
 # =====================================================
-@st.cache_data(show_spinner=False)
-def load_excel(file, sheet, skip=0):
-    return pd.read_excel(file, sheet_name=sheet, skiprows=skip)
-
 def parse_percent(val):
     if pd.isna(val):
         return None
@@ -60,7 +53,7 @@ def parse_number(val):
     return round(float(val), 0)
 
 def load_map(sheet, key_col, val_col, file, skip=0, parser=None):
-    tmp = load_excel(file, sheet, skip)
+    tmp = pd.read_excel(file, sheet_name=sheet, skiprows=skip)
     result = {}
     for _, r in tmp.iterrows():
         v = r[val_col]
@@ -77,27 +70,9 @@ df = pd.read_excel(master_file)
 # =====================================================
 # FLEXIBLE COLUMN MAPPING
 # =====================================================
-FORMAT_COL_CANDIDATES = [
-    "PRODUCT_FORMAT_NAME",
-    "PRODUCT_FORMAT",
-    "FORMAT",
-    "FORMAT_NAME"
-]
-
-VARIANT_COL_CANDIDATES = [
-    "PRODUCT_VARIANT_NAME",
-    "BRAND_SERIES_SUB_FORMAT_NAME",
-    "VARIANT",
-    "VARIANT_NAME",
-    "BRAND_SERIES_VARIANT"
-]
-
-PRODUCT_COL_CANDIDATES = [
-    "PRODUCT_NAME",
-    "PRODUCT",
-    "ITEM_NAME",
-    "SKU_NAME"
-]
+FORMAT_COL_CANDIDATES = ["PRODUCT_FORMAT_NAME", "PRODUCT_FORMAT", "FORMAT", "FORMAT_NAME"]
+VARIANT_COL_CANDIDATES = ["PRODUCT_VARIANT_NAME", "BRAND_SERIES_SUB_FORMAT_NAME", "VARIANT", "VARIANT_NAME"]
+PRODUCT_COL_CANDIDATES = ["PRODUCT_NAME", "PRODUCT", "ITEM_NAME", "SKU_NAME"]
 
 def find_column(df, candidates):
     for c in candidates:
@@ -115,22 +90,11 @@ product_col = find_column(df, PRODUCT_COL_CANDIDATES)
 all_cols = df.columns.tolist()
 
 if not format_col:
-    format_col = st.sidebar.selectbox(
-        "Pilih kolom FORMAT di Master",
-        options=[""] + all_cols
-    )
-
+    format_col = st.sidebar.selectbox("Pilih kolom FORMAT", [""] + all_cols)
 if not variant_col:
-    variant_col = st.sidebar.selectbox(
-        "Pilih kolom VARIANT di Master",
-        options=[""] + all_cols
-    )
-
+    variant_col = st.sidebar.selectbox("Pilih kolom VARIANT", [""] + all_cols)
 if not product_col:
-    product_col = st.sidebar.selectbox(
-        "Pilih kolom PRODUCT di Master",
-        options=[""] + all_cols
-    )
+    product_col = st.sidebar.selectbox("Pilih kolom PRODUCT", [""] + all_cols)
 
 missing = []
 if not format_col or format_col not in df.columns:
@@ -141,11 +105,34 @@ if not product_col or product_col not in df.columns:
     missing.append("PRODUCT")
 
 if missing:
-    st.error(f"❌ Kolom berikut belum valid di Master: {', '.join(missing)}")
+    st.sidebar.error(f"❌ Kolom belum valid: {', '.join(missing)}")
     st.stop()
 
-st.sidebar.success(
-    f"✅ Mapping OK\n\nFormat → {format_col}\nVariant → {variant_col}\nProduct → {product_col}"
+# ================== RAPIH DISPLAY ==================
+st.sidebar.markdown(
+    f"""
+    <div style="background-color:#e6f4ea; padding:12px; border-radius:10px; border:1px solid #34a853; margin-top:10px;">
+        <b style="color:#1e7e34;">✅ Mapping OK</b><br><br>
+        <table style="width:100%; font-size:13px;">
+            <tr>
+                <td><b>Format</b></td>
+                <td>:</td>
+                <td>{format_col}</td>
+            </tr>
+            <tr>
+                <td><b>Variant</b></td>
+                <td>:</td>
+                <td>{variant_col}</td>
+            </tr>
+            <tr>
+                <td><b>Product</b></td>
+                <td>:</td>
+                <td>{product_col}</td>
+            </tr>
+        </table>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 # =====================================================
@@ -153,9 +140,7 @@ st.sidebar.success(
 # =====================================================
 def load_all(file):
     return dict(
-        cont=load_map("Sheet 18", "Product P",
-            "% of Total Current DO TP2 along Product P, Product P Hidden",
-            file, parser=parse_percent),
+        cont=load_map("Sheet 18", "Product P", "% of Total Current DO TP2 along Product P, Product P Hidden", file, parser=parse_percent),
         mtd=load_map("Sheet 1", "Product P", "Current DO", file, parser=parse_number),
         ytd=load_map("Sheet 1", "Product P", "Current DO TP2", file, parser=parse_number),
         g_mtd=load_map("Sheet 4", "Product P", "vs LY", file, skip=1, parser=parse_percent),
@@ -174,97 +159,63 @@ prd = load_all(product_file)
 # =====================================================
 st.sidebar.header("🎯 Product Filters")
 
-for k in ["format", "variant", "product"]:
-    if k not in st.session_state:
-        st.session_state[k] = []
+formats = sorted(df[format_col].dropna().unique())
+variants = sorted(df[variant_col].dropna().unique())
+products = sorted(df[product_col].dropna().unique())
 
-# ---------- FORMAT ----------
-formats = list(dict.fromkeys(df[format_col].dropna()))
-st.session_state["format"] = st.sidebar.multiselect(
-    "Format",
-    formats,
-    default=st.session_state["format"]
-)
-
-# ---------- VARIANT ----------
-variants = list(dict.fromkeys(
-    df[df[format_col].isin(st.session_state["format"])]
-    [variant_col].dropna()
-))
-st.session_state["variant"] = st.sidebar.multiselect(
-    "Variant",
-    variants,
-    default=[v for v in st.session_state["variant"] if v in variants]
-)
-
-# ---------- PRODUCT ----------
-products = list(dict.fromkeys(
-    df[df[variant_col].isin(st.session_state["variant"])]
-    [product_col].dropna()
-))
-st.session_state["product"] = st.sidebar.multiselect(
-    "Product",
-    products,
-    default=[p for p in st.session_state["product"] if p in products]
-)
+selected_formats = st.sidebar.multiselect("Format", formats)
+selected_variants = st.sidebar.multiselect("Variant", variants)
+selected_products = st.sidebar.multiselect("Product", products)
 
 # =====================================================
 # BUILD ROWS
 # =====================================================
 rows = []
 
-rows.append([
-    "GRAND TOTAL",
-    fmt["cont"].get("GRAND TOTAL"),
-    fmt["mtd"].get("GRAND TOTAL"),
-    fmt["ytd"].get("GRAND TOTAL"),
-    fmt["g_mtd"].get("GRAND TOTAL"),
-    fmt["g_l3m"].get("GRAND TOTAL"),
-    fmt["g_ytd"].get("GRAND TOTAL"),
-    fmt["a_mtd"].get("GRAND TOTAL"),
-    fmt["a_ytd"].get("GRAND TOTAL"),
-])
+rows.append(["GRAND TOTAL",
+             fmt["cont"].get("GRAND TOTAL"),
+             fmt["mtd"].get("GRAND TOTAL"),
+             fmt["ytd"].get("GRAND TOTAL"),
+             fmt["g_mtd"].get("GRAND TOTAL"),
+             fmt["g_l3m"].get("GRAND TOTAL"),
+             fmt["g_ytd"].get("GRAND TOTAL"),
+             fmt["a_mtd"].get("GRAND TOTAL"),
+             fmt["a_ytd"].get("GRAND TOTAL")])
 
-for f in st.session_state["format"]:
-    rows.append([
-        f,
-        fmt["cont"].get(f),
-        fmt["mtd"].get(f),
-        fmt["ytd"].get(f),
-        fmt["g_mtd"].get(f),
-        fmt["g_l3m"].get(f),
-        fmt["g_ytd"].get(f),
-        fmt["a_mtd"].get(f),
-        fmt["a_ytd"].get(f),
-    ])
+for f in selected_formats:
+    rows.append([f,
+                 fmt["cont"].get(f),
+                 fmt["mtd"].get(f),
+                 fmt["ytd"].get(f),
+                 fmt["g_mtd"].get(f),
+                 fmt["g_l3m"].get(f),
+                 fmt["g_ytd"].get(f),
+                 fmt["a_mtd"].get(f),
+                 fmt["a_ytd"].get(f)])
 
-    for v in st.session_state["variant"]:
+    for v in selected_variants:
         if v in df[df[format_col] == f][variant_col].values:
-            rows.append([
-                f"        {v}",
-                var["cont"].get(v),
-                var["mtd"].get(v),
-                var["ytd"].get(v),
-                var["g_mtd"].get(v),
-                var["g_l3m"].get(v),
-                var["g_ytd"].get(v),
-                var["a_mtd"].get(v),
-                var["a_ytd"].get(v),
-            ])
+            rows.append([f"        {v}",
+                         var["cont"].get(v),
+                         var["mtd"].get(v),
+                         var["ytd"].get(v),
+                         var["g_mtd"].get(v),
+                         var["g_l3m"].get(v),
+                         var["g_ytd"].get(v),
+                         var["a_mtd"].get(v),
+                         var["a_ytd"].get(v)])
 
-            for p in st.session_state["product"]:
+            for p in selected_products:
                 if p in df[df[variant_col] == v][product_col].values:
-                    rows.append([
-                        f"            {p}",
-                        prd["cont"].get(p),
-                        prd["mtd"].get(p),
-                        prd["ytd"].get(p),
-                        prd["g_mtd"].get(p),
-                        prd["g_l3m"].get(p),
-                        prd["g_ytd"].get(p),
-                        prd["a_mtd"].get(p),
-                        prd["a_ytd"].get(p),
-                    ])
+                    rows.append([f"            {p}",
+                                 prd["cont"].get(p),
+                                 prd["mtd"].get(p),
+                                 prd["ytd"].get(p),
+                                 prd["g_mtd"].get(p),
+                                 prd["g_l3m"].get(p),
+                                 prd["g_ytd"].get(p),
+                                 prd["a_mtd"].get(p),
+                                 prd["a_ytd"].get(p)])
 
 # =====================================================
 # DISPLAY TABLE
@@ -283,76 +234,17 @@ def fmt_pct(x):
 for c in ["Cont YTD","Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach YTD"]:
     display_df[c] = display_df[c].apply(fmt_pct)
 
-display_df.columns = pd.MultiIndex.from_tuples([
-    (f"Cut-off: {cutoff_str}", ""),
-    ("","Cont YTD"),
-    ("Value","MTD"),
-    ("Value","YTD"),
-    ("Growth","MTD"),
-    ("Growth","%Gr L3M"),
-    ("Growth","YTD"),
-    ("Achievement","MTD"),
-    ("Achievement","YTD"),
-])
-
-def highlight_product(row):
-    styles = [""] * len(row)
-    if row.iloc[0].startswith("            "):
-        styles[0] = "color: #1f77b4"
-    return styles
-
-st.dataframe(
-    display_df.style.apply(highlight_product, axis=1),
-    use_container_width=True
-)
+st.dataframe(display_df, use_container_width=True)
 
 # =====================================================
-# DOWNLOAD SECTION
+# DOWNLOAD
 # =====================================================
 st.divider()
 st.subheader("⬇️ Export Report")
 
 output = BytesIO()
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-    wb = writer.book
-    ws = wb.add_worksheet("Report")
-    writer.sheets["Report"] = ws
-
-    header = wb.add_format({"bold": True, "align": "center", "border": 1})
-    bold = wb.add_format({"bold": True, "border": 1})
-    ind1 = wb.add_format({"border": 1, "indent": 2})
-    ind2 = wb.add_format({"border": 1, "indent": 4, "font_color": "blue"})
-    num = wb.add_format({"border": 1, "num_format": "#,##0"})
-    pct_g = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "green"})
-    pct_r = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "red"})
-
-    ws.write(0, 0, f"Cut-off: {cutoff_str}", header)
-    ws.write_row(
-        1, 0,
-        ["Produk","Cont YTD","Value MTD","Value YTD","Growth MTD","%Gr L3M","Growth YTD","Ach MTD","Ach YTD"],
-        header
-    )
-
-    for i, r in enumerate(rows, start=2):
-        if r[0].startswith("            "):
-            name_fmt = ind2
-        elif r[0].startswith("        "):
-            name_fmt = ind1
-        else:
-            name_fmt = bold
-
-        ws.write(i, 0, r[0].strip(), name_fmt)
-
-        for c in range(1, 9):
-            v = r[c]
-            if c == 1 or c >= 4:
-                if v is not None:
-                    ws.write_number(i, c, v / 100, pct_g if v >= 0 else pct_r)
-            else:
-                ws.write_number(i, c, v or 0, num)
-
-    ws.set_column("A:A", 50)
-    ws.set_column("B:I", 18)
+    display_df.to_excel(writer, index=False, sheet_name="Report")
 
 output.seek(0)
 
@@ -362,4 +254,3 @@ st.download_button(
     "Weekly_Performance_Report.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
-
