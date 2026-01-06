@@ -16,7 +16,6 @@ st.set_page_config(
 # =====================================================
 st.title("📊 Weekly Performance Report")
 st.subheader("Format, Variant & Product Performance Overview")
-
 st.caption("Dynamic performance monitoring across product hierarchy")
 st.divider()
 
@@ -25,14 +24,10 @@ st.divider()
 # =====================================================
 st.sidebar.header("🗓️ Reporting Settings")
 
-cutoff_date = st.sidebar.date_input(
-    "Cut-off Date",
-    datetime.date.today()
-)
+cutoff_date = st.sidebar.date_input("Cut-off Date", datetime.date.today())
 cutoff_str = cutoff_date.strftime("%d %B %Y")
 
 st.sidebar.info(f"📌 Cut-off Date: **{cutoff_str}**")
-
 st.sidebar.divider()
 
 with st.sidebar.expander("📁 Upload Excel Files", expanded=False):
@@ -80,6 +75,79 @@ def load_map(sheet, key_col, val_col, file, skip=0, parser=None):
 df = pd.read_excel(master_file)
 
 # =====================================================
+# FLEXIBLE COLUMN MAPPING
+# =====================================================
+FORMAT_COL_CANDIDATES = [
+    "PRODUCT_FORMAT_NAME",
+    "PRODUCT_FORMAT",
+    "FORMAT",
+    "FORMAT_NAME"
+]
+
+VARIANT_COL_CANDIDATES = [
+    "PRODUCT_VARIANT_NAME",
+    "BRAND_SERIES_SUB_FORMAT_NAME",
+    "VARIANT",
+    "VARIANT_NAME"
+]
+
+PRODUCT_COL_CANDIDATES = [
+    "PRODUCT_NAME",
+    "PRODUCT",
+    "ITEM_NAME",
+    "SKU_NAME"
+]
+
+def find_column(df, candidates):
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+st.sidebar.divider()
+st.sidebar.header("🧩 Master Column Mapping")
+
+format_col = find_column(df, FORMAT_COL_CANDIDATES)
+variant_col = find_column(df, VARIANT_COL_CANDIDATES)
+product_col = find_column(df, PRODUCT_COL_CANDIDATES)
+
+all_cols = df.columns.tolist()
+
+if not format_col:
+    format_col = st.sidebar.selectbox(
+        "Pilih kolom FORMAT di Master",
+        options=[""] + all_cols
+    )
+
+if not variant_col:
+    variant_col = st.sidebar.selectbox(
+        "Pilih kolom VARIANT di Master",
+        options=[""] + all_cols
+    )
+
+if not product_col:
+    product_col = st.sidebar.selectbox(
+        "Pilih kolom PRODUCT di Master",
+        options=[""] + all_cols
+    )
+
+missing = []
+if not format_col or format_col not in df.columns:
+    missing.append("FORMAT")
+if not variant_col or variant_col not in df.columns:
+    missing.append("VARIANT")
+if not product_col or product_col not in df.columns:
+    missing.append("PRODUCT")
+
+if missing:
+    st.error(f"❌ Kolom berikut belum valid di Master: {', '.join(missing)}")
+    st.stop()
+
+st.sidebar.success(
+    f"✅ Mapping OK\n\nFormat → {format_col}\nVariant → {variant_col}\nProduct → {product_col}"
+)
+
+# =====================================================
 # LOAD METRICS
 # =====================================================
 def load_all(file):
@@ -110,7 +178,7 @@ for k in ["format", "variant", "product"]:
         st.session_state[k] = []
 
 # ---------- FORMAT ----------
-formats = list(dict.fromkeys(df["PRODUCT_FORMAT_NAME"].dropna()))
+formats = list(dict.fromkeys(df[format_col].dropna()))
 st.session_state["format"] = st.sidebar.multiselect(
     "Format",
     formats,
@@ -119,8 +187,8 @@ st.session_state["format"] = st.sidebar.multiselect(
 
 # ---------- VARIANT ----------
 variants = list(dict.fromkeys(
-    df[df["PRODUCT_FORMAT_NAME"].isin(st.session_state["format"])]
-    ["PRODUCT_VARIANT_NAME"].dropna()
+    df[df[format_col].isin(st.session_state["format"])]
+    [variant_col].dropna()
 ))
 st.session_state["variant"] = st.sidebar.multiselect(
     "Variant",
@@ -130,8 +198,8 @@ st.session_state["variant"] = st.sidebar.multiselect(
 
 # ---------- PRODUCT ----------
 products = list(dict.fromkeys(
-    df[df["PRODUCT_VARIANT_NAME"].isin(st.session_state["variant"])]
-    ["PRODUCT_NAME"].dropna()
+    df[df[variant_col].isin(st.session_state["variant"])]
+    [product_col].dropna()
 ))
 st.session_state["product"] = st.sidebar.multiselect(
     "Product",
@@ -140,7 +208,7 @@ st.session_state["product"] = st.sidebar.multiselect(
 )
 
 # =====================================================
-# BUILD ROWS (LOGIC AS IS)
+# BUILD ROWS
 # =====================================================
 rows = []
 
@@ -170,7 +238,7 @@ for f in st.session_state["format"]:
     ])
 
     for v in st.session_state["variant"]:
-        if v in df[df["PRODUCT_FORMAT_NAME"] == f]["PRODUCT_VARIANT_NAME"].values:
+        if v in df[df[format_col] == f][variant_col].values:
             rows.append([
                 f"        {v}",
                 var["cont"].get(v),
@@ -184,7 +252,7 @@ for f in st.session_state["format"]:
             ])
 
             for p in st.session_state["product"]:
-                if p in df[df["PRODUCT_VARIANT_NAME"] == v]["PRODUCT_NAME"].values:
+                if p in df[df[variant_col] == v][product_col].values:
                     rows.append([
                         f"            {p}",
                         prd["cont"].get(p),
@@ -293,4 +361,3 @@ st.download_button(
     "Weekly_Performance_Report.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
-
