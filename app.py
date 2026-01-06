@@ -88,7 +88,8 @@ VARIANT_COL_CANDIDATES = [
     "PRODUCT_VARIANT_NAME",
     "BRAND_SERIES_SUB_FORMAT_NAME",
     "VARIANT",
-    "VARIANT_NAME"
+    "VARIANT_NAME",
+    "BRAND_SERIES_VARIANT"
 ]
 
 PRODUCT_COL_CANDIDATES = [
@@ -361,3 +362,4 @@ st.download_button(
     "Weekly_Performance_Report.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
