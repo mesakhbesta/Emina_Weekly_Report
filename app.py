@@ -38,8 +38,12 @@ if not all([master_file, format_file, variant_file, product_file]):
     st.stop()
 
 # =====================================================
-# HELPER
+# CACHE & HELPER
 # =====================================================
+@st.cache_data(show_spinner=False)
+def load_excel(file, sheet, skip=0):
+    return pd.read_excel(file, sheet_name=sheet, skiprows=skip)
+
 def parse_percent(val):
     if pd.isna(val):
         return None
@@ -53,7 +57,7 @@ def parse_number(val):
     return round(float(val), 0)
 
 def load_map(sheet, key_col, val_col, file, skip=0, parser=None):
-    tmp = pd.read_excel(file, sheet_name=sheet, skiprows=skip)
+    tmp = load_excel(file, sheet, skip)
     result = {}
     for _, r in tmp.iterrows():
         v = r[val_col]
@@ -90,11 +94,11 @@ product_col = find_column(df, PRODUCT_COL_CANDIDATES)
 all_cols = df.columns.tolist()
 
 if not format_col:
-    format_col = st.sidebar.selectbox("Pilih kolom FORMAT", [""] + all_cols)
+    format_col = st.sidebar.selectbox("Pilih kolom FORMAT di Master", [""] + all_cols)
 if not variant_col:
-    variant_col = st.sidebar.selectbox("Pilih kolom VARIANT", [""] + all_cols)
+    variant_col = st.sidebar.selectbox("Pilih kolom VARIANT di Master", [""] + all_cols)
 if not product_col:
-    product_col = st.sidebar.selectbox("Pilih kolom PRODUCT", [""] + all_cols)
+    product_col = st.sidebar.selectbox("Pilih kolom PRODUCT di Master", [""] + all_cols)
 
 missing = []
 if not format_col or format_col not in df.columns:
@@ -105,42 +109,30 @@ if not product_col or product_col not in df.columns:
     missing.append("PRODUCT")
 
 if missing:
-    st.sidebar.error(f"❌ Kolom belum valid: {', '.join(missing)}")
+    st.error(f"❌ Kolom berikut belum valid di Master: {', '.join(missing)}")
     st.stop()
 
-# ================== RAPIH DISPLAY ==================
-st.sidebar.markdown(
-    f"""
-    <div style="background-color:#e6f4ea; padding:12px; border-radius:10px; border:1px solid #34a853; margin-top:10px;">
-        <b style="color:#1e7e34;">✅ Mapping OK</b><br><br>
-        <table style="width:100%; font-size:13px;">
-            <tr>
-                <td><b>Format</b></td>
-                <td>:</td>
-                <td>{format_col}</td>
-            </tr>
-            <tr>
-                <td><b>Variant</b></td>
-                <td>:</td>
-                <td>{variant_col}</td>
-            </tr>
-            <tr>
-                <td><b>Product</b></td>
-                <td>:</td>
-                <td>{product_col}</td>
-            </tr>
-        </table>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# ===================== RAPIH + BISA DISEMBUNYIKAN =====================
+with st.sidebar.expander("✅ Master Column Mapping Result", expanded=False):
+    st.markdown(
+        f"""
+        <div style="padding:10px;border-radius:10px;background-color:#f0f2f6">
+            <b>Format</b> : <span style="color:#1f77b4">{format_col}</span><br>
+            <b>Variant</b> : <span style="color:#2ca02c">{variant_col}</span><br>
+            <b>Product</b> : <span style="color:#ff7f0e">{product_col}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # =====================================================
 # LOAD METRICS
 # =====================================================
 def load_all(file):
     return dict(
-        cont=load_map("Sheet 18", "Product P", "% of Total Current DO TP2 along Product P, Product P Hidden", file, parser=parse_percent),
+        cont=load_map("Sheet 18", "Product P",
+            "% of Total Current DO TP2 along Product P, Product P Hidden",
+            file, parser=parse_percent),
         mtd=load_map("Sheet 1", "Product P", "Current DO", file, parser=parse_number),
         ytd=load_map("Sheet 1", "Product P", "Current DO TP2", file, parser=parse_number),
         g_mtd=load_map("Sheet 4", "Product P", "vs LY", file, skip=1, parser=parse_percent),
@@ -159,63 +151,87 @@ prd = load_all(product_file)
 # =====================================================
 st.sidebar.header("🎯 Product Filters")
 
-formats = sorted(df[format_col].dropna().unique())
-variants = sorted(df[variant_col].dropna().unique())
-products = sorted(df[product_col].dropna().unique())
+for k in ["format", "variant", "product"]:
+    if k not in st.session_state:
+        st.session_state[k] = []
 
-selected_formats = st.sidebar.multiselect("Format", formats)
-selected_variants = st.sidebar.multiselect("Variant", variants)
-selected_products = st.sidebar.multiselect("Product", products)
+# ---------- FORMAT ----------
+formats = list(dict.fromkeys(df[format_col].dropna()))
+st.session_state["format"] = st.sidebar.multiselect("Format", formats, default=st.session_state["format"])
+
+# ---------- VARIANT ----------
+variants = list(dict.fromkeys(
+    df[df[format_col].isin(st.session_state["format"])][variant_col].dropna()
+))
+st.session_state["variant"] = st.sidebar.multiselect(
+    "Variant", variants, default=[v for v in st.session_state["variant"] if v in variants]
+)
+
+# ---------- PRODUCT ----------
+products = list(dict.fromkeys(
+    df[df[variant_col].isin(st.session_state["variant"])][product_col].dropna()
+))
+st.session_state["product"] = st.sidebar.multiselect(
+    "Product", products, default=[p for p in st.session_state["product"] if p in products]
+)
 
 # =====================================================
 # BUILD ROWS
 # =====================================================
 rows = []
 
-rows.append(["GRAND TOTAL",
-             fmt["cont"].get("GRAND TOTAL"),
-             fmt["mtd"].get("GRAND TOTAL"),
-             fmt["ytd"].get("GRAND TOTAL"),
-             fmt["g_mtd"].get("GRAND TOTAL"),
-             fmt["g_l3m"].get("GRAND TOTAL"),
-             fmt["g_ytd"].get("GRAND TOTAL"),
-             fmt["a_mtd"].get("GRAND TOTAL"),
-             fmt["a_ytd"].get("GRAND TOTAL")])
+rows.append([
+    "GRAND TOTAL",
+    fmt["cont"].get("GRAND TOTAL"),
+    fmt["mtd"].get("GRAND TOTAL"),
+    fmt["ytd"].get("GRAND TOTAL"),
+    fmt["g_mtd"].get("GRAND TOTAL"),
+    fmt["g_l3m"].get("GRAND TOTAL"),
+    fmt["g_ytd"].get("GRAND TOTAL"),
+    fmt["a_mtd"].get("GRAND TOTAL"),
+    fmt["a_ytd"].get("GRAND TOTAL"),
+])
 
-for f in selected_formats:
-    rows.append([f,
-                 fmt["cont"].get(f),
-                 fmt["mtd"].get(f),
-                 fmt["ytd"].get(f),
-                 fmt["g_mtd"].get(f),
-                 fmt["g_l3m"].get(f),
-                 fmt["g_ytd"].get(f),
-                 fmt["a_mtd"].get(f),
-                 fmt["a_ytd"].get(f)])
+for f in st.session_state["format"]:
+    rows.append([
+        f,
+        fmt["cont"].get(f),
+        fmt["mtd"].get(f),
+        fmt["ytd"].get(f),
+        fmt["g_mtd"].get(f),
+        fmt["g_l3m"].get(f),
+        fmt["g_ytd"].get(f),
+        fmt["a_mtd"].get(f),
+        fmt["a_ytd"].get(f),
+    ])
 
-    for v in selected_variants:
+    for v in st.session_state["variant"]:
         if v in df[df[format_col] == f][variant_col].values:
-            rows.append([f"        {v}",
-                         var["cont"].get(v),
-                         var["mtd"].get(v),
-                         var["ytd"].get(v),
-                         var["g_mtd"].get(v),
-                         var["g_l3m"].get(v),
-                         var["g_ytd"].get(v),
-                         var["a_mtd"].get(v),
-                         var["a_ytd"].get(v)])
+            rows.append([
+                f"        {v}",
+                var["cont"].get(v),
+                var["mtd"].get(v),
+                var["ytd"].get(v),
+                var["g_mtd"].get(v),
+                var["g_l3m"].get(v),
+                var["g_ytd"].get(v),
+                var["a_mtd"].get(v),
+                var["a_ytd"].get(v),
+            ])
 
-            for p in selected_products:
+            for p in st.session_state["product"]:
                 if p in df[df[variant_col] == v][product_col].values:
-                    rows.append([f"            {p}",
-                                 prd["cont"].get(p),
-                                 prd["mtd"].get(p),
-                                 prd["ytd"].get(p),
-                                 prd["g_mtd"].get(p),
-                                 prd["g_l3m"].get(p),
-                                 prd["g_ytd"].get(p),
-                                 prd["a_mtd"].get(p),
-                                 prd["a_ytd"].get(p)])
+                    rows.append([
+                        f"            {p}",
+                        prd["cont"].get(p),
+                        prd["mtd"].get(p),
+                        prd["ytd"].get(p),
+                        prd["g_mtd"].get(p),
+                        prd["g_l3m"].get(p),
+                        prd["g_ytd"].get(p),
+                        prd["a_mtd"].get(p),
+                        prd["a_ytd"].get(p),
+                    ])
 
 # =====================================================
 # DISPLAY TABLE
@@ -237,7 +253,7 @@ for c in ["Cont YTD","Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach Y
 st.dataframe(display_df, use_container_width=True)
 
 # =====================================================
-# DOWNLOAD
+# DOWNLOAD SECTION
 # =====================================================
 st.divider()
 st.subheader("⬇️ Export Report")
