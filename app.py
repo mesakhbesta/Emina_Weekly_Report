@@ -23,8 +23,8 @@ st.sidebar.header("🗓️ Reporting Settings")
 
 cutoff_date = st.sidebar.date_input("Cut-off Date", datetime.date.today())
 cutoff_str = cutoff_date.strftime("%d %B %Y")
-
 st.sidebar.info(f"📌 Cut-off Date: **{cutoff_str}**")
+
 st.sidebar.divider()
 
 with st.sidebar.expander("📁 Upload Excel Files", expanded=False):
@@ -74,9 +74,26 @@ df = pd.read_excel(master_file)
 # =====================================================
 # FLEXIBLE COLUMN MAPPING
 # =====================================================
-FORMAT_COL_CANDIDATES = ["PRODUCT_FORMAT_NAME", "PRODUCT_FORMAT", "FORMAT", "FORMAT_NAME"]
-VARIANT_COL_CANDIDATES = ["PRODUCT_VARIANT_NAME", "BRAND_SERIES_SUB_FORMAT_NAME", "VARIANT", "VARIANT_NAME"]
-PRODUCT_COL_CANDIDATES = ["PRODUCT_NAME", "PRODUCT", "ITEM_NAME", "SKU_NAME"]
+FORMAT_COL_CANDIDATES = [
+    "PRODUCT_FORMAT_NAME",
+    "PRODUCT_FORMAT",
+    "FORMAT",
+    "FORMAT_NAME"
+]
+
+VARIANT_COL_CANDIDATES = [
+    "PRODUCT_VARIANT_NAME",
+    "BRAND_SERIES_SUB_FORMAT_NAME",
+    "VARIANT",
+    "VARIANT_NAME"
+]
+
+PRODUCT_COL_CANDIDATES = [
+    "PRODUCT_NAME",
+    "PRODUCT",
+    "ITEM_NAME",
+    "SKU_NAME"
+]
 
 def find_column(df, candidates):
     for c in candidates:
@@ -94,11 +111,13 @@ product_col = find_column(df, PRODUCT_COL_CANDIDATES)
 all_cols = df.columns.tolist()
 
 if not format_col:
-    format_col = st.sidebar.selectbox("Pilih kolom FORMAT di Master", [""] + all_cols)
+    format_col = st.sidebar.selectbox("Pilih kolom FORMAT di Master", options=[""] + all_cols)
+
 if not variant_col:
-    variant_col = st.sidebar.selectbox("Pilih kolom VARIANT di Master", [""] + all_cols)
+    variant_col = st.sidebar.selectbox("Pilih kolom VARIANT di Master", options=[""] + all_cols)
+
 if not product_col:
-    product_col = st.sidebar.selectbox("Pilih kolom PRODUCT di Master", [""] + all_cols)
+    product_col = st.sidebar.selectbox("Pilih kolom PRODUCT di Master", options=[""] + all_cols)
 
 missing = []
 if not format_col or format_col not in df.columns:
@@ -112,18 +131,19 @@ if missing:
     st.error(f"❌ Kolom berikut belum valid di Master: {', '.join(missing)}")
     st.stop()
 
-# ===================== RAPIH + BISA DISEMBUNYIKAN =====================
-with st.sidebar.expander("✅ Master Column Mapping Result", expanded=False):
-    st.markdown(
-        f"""
-        <div style="padding:10px;border-radius:10px;background-color:#f0f2f6">
-            <b>Format</b> : <span style="color:#1f77b4">{format_col}</span><br>
-            <b>Variant</b> : <span style="color:#2ca02c">{variant_col}</span><br>
-            <b>Product</b> : <span style="color:#ff7f0e">{product_col}</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+# ===== RAPIH & COLLAPSIBLE DISPLAY =====
+with st.sidebar.expander("✅ Master Column Mapping (click to expand)", expanded=False):
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        st.markdown("**Format**")
+        st.markdown("**Variant**")
+        st.markdown("**Product**")
+
+    with col2:
+        st.markdown(f":blue[{format_col}]")
+        st.markdown(f":blue[{variant_col}]")
+        st.markdown(f":blue[{product_col}]")
 
 # =====================================================
 # LOAD METRICS
@@ -157,22 +177,32 @@ for k in ["format", "variant", "product"]:
 
 # ---------- FORMAT ----------
 formats = list(dict.fromkeys(df[format_col].dropna()))
-st.session_state["format"] = st.sidebar.multiselect("Format", formats, default=st.session_state["format"])
+st.session_state["format"] = st.sidebar.multiselect(
+    "Format",
+    formats,
+    default=st.session_state["format"]
+)
 
 # ---------- VARIANT ----------
 variants = list(dict.fromkeys(
-    df[df[format_col].isin(st.session_state["format"])][variant_col].dropna()
+    df[df[format_col].isin(st.session_state["format"])]
+    [variant_col].dropna()
 ))
 st.session_state["variant"] = st.sidebar.multiselect(
-    "Variant", variants, default=[v for v in st.session_state["variant"] if v in variants]
+    "Variant",
+    variants,
+    default=[v for v in st.session_state["variant"] if v in variants]
 )
 
 # ---------- PRODUCT ----------
 products = list(dict.fromkeys(
-    df[df[variant_col].isin(st.session_state["variant"])][product_col].dropna()
+    df[df[variant_col].isin(st.session_state["variant"])]
+    [product_col].dropna()
 ))
 st.session_state["product"] = st.sidebar.multiselect(
-    "Product", products, default=[p for p in st.session_state["product"] if p in products]
+    "Product",
+    products,
+    default=[p for p in st.session_state["product"] if p in products]
 )
 
 # =====================================================
@@ -250,7 +280,28 @@ def fmt_pct(x):
 for c in ["Cont YTD","Growth MTD","Growth %Gr L3M","Growth YTD","Ach MTD","Ach YTD"]:
     display_df[c] = display_df[c].apply(fmt_pct)
 
-st.dataframe(display_df, use_container_width=True)
+display_df.columns = pd.MultiIndex.from_tuples([
+    (f"Cut-off: {cutoff_str}", ""),
+    ("","Cont YTD"),
+    ("Value","MTD"),
+    ("Value","YTD"),
+    ("Growth","MTD"),
+    ("Growth","%Gr L3M"),
+    ("Growth","YTD"),
+    ("Achievement","MTD"),
+    ("Achievement","YTD"),
+])
+
+def highlight_product(row):
+    styles = [""] * len(row)
+    if row.iloc[0].startswith("            "):
+        styles[0] = "color: #1f77b4"
+    return styles
+
+st.dataframe(
+    display_df.style.apply(highlight_product, axis=1),
+    use_container_width=True
+)
 
 # =====================================================
 # DOWNLOAD SECTION
@@ -260,7 +311,45 @@ st.subheader("⬇️ Export Report")
 
 output = BytesIO()
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-    display_df.to_excel(writer, index=False, sheet_name="Report")
+    wb = writer.book
+    ws = wb.add_worksheet("Report")
+    writer.sheets["Report"] = ws
+
+    header = wb.add_format({"bold": True, "align": "center", "border": 1})
+    bold = wb.add_format({"bold": True, "border": 1})
+    ind1 = wb.add_format({"border": 1, "indent": 2})
+    ind2 = wb.add_format({"border": 1, "indent": 4, "font_color": "blue"})
+    num = wb.add_format({"border": 1, "num_format": "#,##0"})
+    pct_g = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "green"})
+    pct_r = wb.add_format({"border": 1, "num_format": "0.0%", "font_color": "red"})
+
+    ws.write(0, 0, f"Cut-off: {cutoff_str}", header)
+    ws.write_row(
+        1, 0,
+        ["Produk","Cont YTD","Value MTD","Value YTD","Growth MTD","%Gr L3M","Growth YTD","Ach MTD","Ach YTD"],
+        header
+    )
+
+    for i, r in enumerate(rows, start=2):
+        if r[0].startswith("            "):
+            name_fmt = ind2
+        elif r[0].startswith("        "):
+            name_fmt = ind1
+        else:
+            name_fmt = bold
+
+        ws.write(i, 0, r[0].strip(), name_fmt)
+
+        for c in range(1, 9):
+            v = r[c]
+            if c == 1 or c >= 4:
+                if v is not None:
+                    ws.write_number(i, c, v / 100, pct_g if v >= 0 else pct_r)
+            else:
+                ws.write_number(i, c, v or 0, num)
+
+    ws.set_column("A:A", 50)
+    ws.set_column("B:I", 18)
 
 output.seek(0)
 
